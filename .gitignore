@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+# Data / outputs (não versionar rasters grandes)
+*.tif
+*.tiff
+*.npz
+data/
+outputs/
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# dados de trabalho (regeneráveis)
+examples/demo_project/
+examples/points.json
+examples/points_antigos.json
+examples/points_*_backup.json
+examples/cells.json
+examples/models/
+
+# bundle: código é o próprio repo (não duplicar); data é pesado
+
+# dados/artefatos de pesquisa privados em examples/ (nunca vão pro repo)
+examples/dataset_*.json
+examples/*_ridewide*.json
+examples/crops_*.json
+examples/cultivo_*.json
+examples/model_*.pt
+examples/*.pt
+examples/points_antigos.json.bak*
+.coverage
+alignment_check.png
+examples/demo_project/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install (core + dev)
+        run: pip install -e .[dev]
+      - name: Run headless core suite
+        # trainer tests skip themselves when torch isn't installed; the rest of
+        # the core (raster I/O, timeseries, selection, stores, versioning,
+        # workspace helpers) runs without display or GPU.
+        run: pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  tests-with-train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install (core + dev + train, CPU torch)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e .[dev,train]
+      - name: Run full suite with coverage
+        run: pytest -q --cov=ts_annotator --cov-report=term-missing
+        env:
+          QT_QPA_PLATFORM: offscreen

@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "TSA — Time Series Annotator: map-native, active-learning annotation of satellite image time series"
+authors:
+  - family-names: "Ferreira de Carvalho"
+    given-names: "Osmar Luiz"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"  # TODO
+repository-code: "https://github.com/osmarluiz/ts-annotator"
+license: MIT
+version: 0.1.0
+date-released: "2026-07-06"
+keywords:
+  - remote sensing
+  - satellite image time series
+  - annotation
+  - active learning
