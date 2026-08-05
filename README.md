@@ -1,5 +1,9 @@
 # TSA — Time Series Annotator
 
+[![CI](https://github.com/osmarluiz/ts-annotator/actions/workflows/ci.yml/badge.svg)](https://github.com/osmarluiz/ts-annotator/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 **Label satellite image time series on the map, with the model in the loop.**
 
 You click a pixel on a gigapixel scene, its yearly curve appears beside the map, you
