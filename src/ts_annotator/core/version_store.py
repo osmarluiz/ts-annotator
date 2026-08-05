@@ -55,10 +55,16 @@ def model_stem(model_path) -> str:
     Modelos versionados são sempre ``<versão>/model.pt`` — o stem útil é o nome da
     VERSÃO (senão toda versão colidiria em "model"). Arquivos .pt soltos (legado)
     continuam usando o nome do arquivo.
+
+    Aceita os dois separadores de propósito. Um projeto é uma pasta que se copia
+    entre máquinas, e o sidecar da predição guarda o caminho como ele foi escrito,
+    então um projeto criado no Windows tem de ser lido no Linux sem perder a
+    identidade da versão. ``os.path.basename`` no POSIX não corta em ``\\``.
     """
-    stem = os.path.splitext(os.path.basename(model_path))[0]
-    if stem == "model":
-        return os.path.basename(os.path.dirname(model_path))
+    parts = str(model_path).replace("\\", "/").rstrip("/").split("/")
+    stem = os.path.splitext(parts[-1])[0]
+    if stem == "model" and len(parts) > 1:
+        return parts[-2]
     return stem
 
 
