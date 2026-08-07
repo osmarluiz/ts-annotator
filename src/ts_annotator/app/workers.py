@@ -20,13 +20,17 @@ class TrainWorker(QObject):
         self.lr = 1e-3
         self.epochs = 120
         self.folds = 5
+        self.n_blocks = None     # None = formula automatica de sempre
+        self.buffer_px = 0.0     # 0 = comportamento anterior (sem zona morta)
         self.class_super = {}     # classe fina -> superclasse
         self.collapsed = set()    # supers a COLAPSAR (treinar nesse nível)
         self._go.connect(self._run)
 
-    def start(self, lr, epochs, folds, class_super=None, collapsed=None):
+    def start(self, lr, epochs, folds, class_super=None, collapsed=None,
+              n_blocks=None, buffer_px=0.0):
         from collections import Counter
         self.lr, self.epochs, self.folds = lr, epochs, folds
+        self.n_blocks, self.buffer_px = n_blocks, float(buffer_px or 0.0)
         self.class_super = dict(class_super or {})
         self.collapsed = set(collapsed or ())
         # supers "de grupo" (>1 membro fino) — um rótulo com esse nome é um SUPER-rótulo
@@ -68,10 +72,8 @@ class TrainWorker(QObject):
                                          f"rotule pelo menos 30 antes de treinar"})
                 return
             cur4 = np.array([np.asarray(p["curve"]).T for p in pts], "float32")  # (N,4,12)
-            from sklearn.cluster import KMeans
             coords = np.array([[p["row"], p["col"]] for p in pts], float)
-            nblk = int(min(len(pts) // 4, max(6 * self.folds, 30)))  # blocos auto p/ os folds
-            groups = KMeans(nblk, n_init=3, random_state=0).fit_predict(coords)
+            groups = trainer.spatial_blocks(coords, self.folds, self.n_blocks)
             labs = sorted(set(ylab))
             y = np.array([labs.index(c) for c in ylab])
             X = trainer.build_X(cur4)
@@ -89,7 +91,8 @@ class TrainWorker(QObject):
                                 "frac": f * self.epochs / total})
 
             res = trainer.spatial_cv(X, y, groups, len(labs), lr=self.lr, epochs=self.epochs,
-                                     k=self.folds, progress=_cv_fold, epoch_cb=_cv_epoch)
+                                     k=self.folds, progress=_cv_fold, epoch_cb=_cv_epoch,
+                                     coords=coords, buffer_px=self.buffer_px)
             self.prog.emit("cleanlab: analisando qualidade dos rótulos…")
             self.step.emit({"phase": "cleanlab", "frac": self.folds * self.epochs / total})
             scores, issues = trainer.label_scores(y, res["oof_proba"])

@@ -103,23 +103,77 @@ def predict_proba(net, mu, sd, X, batch=8192):
     return np.concatenate(out) if out else np.zeros((0, net.fc.out_features), "float32")
 
 
-def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_cb=None):
+def spatial_blocks(coords, folds=5, n_blocks=None, seed=0):
+    """Blocos espaciais (k-means sobre row/col) que viram os grupos da CV.
+
+    ``n_blocks=None`` reproduz a fórmula automática de sempre. Passar um número
+    é o que permite blocos maiores ou menores que o automático.
+    """
+    from sklearn.cluster import KMeans
+    coords = np.asarray(coords, float)
+    n = len(coords)
+    if n_blocks in (None, 0):
+        n_blocks = int(min(n // 4, max(6 * folds, 30)))
+    n_blocks = max(2, min(int(n_blocks), n))
+    return KMeans(n_blocks, n_init=3, random_state=seed).fit_predict(coords)
+
+
+def _nearest_dist(a, b):
+    """Distância de cada linha de `a` ao ponto mais próximo de `b`."""
+    if len(a) == 0 or len(b) == 0:
+        return np.full(len(a), np.inf)
+    from scipy.spatial import cKDTree
+    return cKDTree(np.asarray(b, float)).query(np.asarray(a, float), k=1)[0]
+
+
+def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_cb=None,
+               coords=None, buffer_px=0.0):
     """spatial-CV ESTRATIFICADA (StratifiedGroupKFold) -> OOF + métricas.
 
     progress(fold, k, fold_bacc) ao fim de cada fold (métrica incremental);
     epoch_cb(fold, k, epoch, epochs, loss) durante o fit de cada fold (barra +
     curva de loss ao vivo — o CV é o grosso do tempo e antes era mudo).
+
+    `coords` (N,2) em row/col habilita duas coisas. Com `buffer_px>0`, cada dobra
+    DESCARTA do treino os pontos a menos dessa distância de qualquer ponto de
+    validação — é o que GARANTE a separação, que blocos sozinhos não fazem
+    (células vizinhas se tocam). E, com ou sem buffer, a separação obtida é
+    medida e volta no resultado, então o número não depende de script externo.
+
+    `stratified=False` no retorno significa que StratifiedGroupKFold não coube e
+    o GroupKFold entrou: as métricas continuam válidas, mas sem garantia de
+    classe em toda dobra. Antes isso acontecia calado.
     """
     y = np.asarray(y)
     g = np.asarray([str(x) for x in groups])
     ng = len(set(g.tolist()))
     k = max(2, min(k, ng))
+    stratified = True
     try:
         folds = list(StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=0).split(X, y, g))
     except Exception:
+        stratified = False
         folds = list(GroupKFold(k).split(X, y, g))   # fallback se estratificação não couber
+    C = None if coords is None else np.asarray(coords, float)
     oof = np.zeros((len(y), nc), "float32")
+    seps, dropped = [], 0
     for fi, (tr, va) in enumerate(folds):
+        if C is not None and buffer_px > 0:
+            keep = _nearest_dist(C[tr], C[va]) >= buffer_px
+            dropped += int((~keep).sum())
+            tr = tr[keep]
+            # buffer maior que o espalhamento dos pontos esvazia o treino. Falhar
+            # aqui, dizendo o número, e' melhor que treinar com o que sobrou.
+            if len(tr) < nc:
+                raise ValueError(
+                    f"buffer de {buffer_px:g} px deixou {len(tr)} ponto(s) de treino na dobra "
+                    f"{fi + 1} de {k} (mínimo {nc}, um por classe). Os pontos estão mais "
+                    f"próximos entre si que o buffer pedido: reduza o buffer ou colete "
+                    f"pontos mais espalhados."
+                )
+        if C is not None:
+            d = _nearest_dist(C[va], C[tr])
+            seps.append(float(d.min()) if len(d) else np.inf)
         _ec = (lambda e, E, loss, _f=fi: epoch_cb(_f + 1, k, e, E, loss)) if epoch_cb else None
         net, mu, sd = fit(X[tr], y[tr], nc, lr, epochs, progress=_ec)
         oof[va] = predict_proba(net, mu, sd, X[va])
@@ -129,6 +183,10 @@ def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_
     pred = oof.argmax(1)
     return {
         "oof_proba": oof, "pred": pred, "n_groups": ng, "k": k,
+        "stratified": stratified,
+        "buffer_px": float(buffer_px),
+        "dropped_by_buffer": int(dropped),
+        "min_separation_px": (float(min(seps)) if seps else None),
         "bacc": float(balanced_accuracy_score(y, pred)),
         "macro_f1": float(f1_score(y, pred, average="macro")),
         "f1_per_class": f1_score(y, pred, average=None),

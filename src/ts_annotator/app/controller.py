@@ -1489,6 +1489,13 @@ class AnnotatorController:
                     "bacc": float(res["bacc"]), "macro_f1": float(res["macro_f1"]),
                     "f1_per_class": {res["labs"][i]: float(f1[i]) for i in range(len(res["labs"]))},
                     "n_groups": int(res.get("n_groups", 0)), "k": int(res.get("k", 0)),
+                    # proveniencia da spatial-CV: separacao OBTIDA entre treino e
+                    # validacao, e se a estratificacao valeu. Sem isto o numero de
+                    # acuracia nao diz sob que separacao foi medido.
+                    "stratified": bool(res.get("stratified", True)),
+                    "buffer_px": float(res.get("buffer_px", 0.0)),
+                    "dropped_by_buffer": int(res.get("dropped_by_buffer", 0)),
+                    "min_separation_px": res.get("min_separation_px"),
                     "cleanlab_suspects": int(len(res["issues"])),
                     "confusion": res.get("confusion"),   # antes era calculada e descartada
                 },
@@ -1587,7 +1594,9 @@ class AnnotatorController:
         except Exception as e:
             log.warning("snapshot do dataset falhou: %s", e)
         self.train_win.start(f"spatial-CV {folds} folds · {ep} épocas · lr {lr}")
-        self.tworker.start(lr, ep, folds, self.class_super, collapsed)
+        nblk, buf = self.train.cv_config()
+        self.tworker.start(lr, ep, folds, self.class_super, collapsed,
+                           n_blocks=nblk, buffer_px=buf)
 
     # =====================================================================
     # Workers / threads (chamado pela janela DEPOIS de construir os widgets)

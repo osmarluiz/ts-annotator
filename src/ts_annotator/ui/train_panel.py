@@ -66,6 +66,28 @@ class TrainPanel(QWidget):
         fold_row.addWidget(self.fold_spin)
         L.addLayout(fold_row)
 
+        # blocos espaciais: 0 = a fórmula automática de sempre
+        blk_row = QHBoxLayout()
+        blk_row.addWidget(QLabel("blocos (0=auto)"))
+        self.blk_spin = QSpinBox()
+        self.blk_spin.setRange(0, 500)
+        self.blk_spin.setValue(0)
+        self.blk_spin.setToolTip("nº de blocos espaciais da CV. 0 usa a fórmula automática.")
+        blk_row.addWidget(self.blk_spin)
+        L.addLayout(blk_row)
+
+        # zona morta: bloco sozinho NÃO garante separação (células vizinhas se
+        # tocam). O buffer descarta do treino quem estiver perto da validação.
+        buf_row = QHBoxLayout()
+        buf_row.addWidget(QLabel("buffer (px)"))
+        self.buf_spin = QSpinBox()
+        self.buf_spin.setRange(0, 100000)
+        self.buf_spin.setValue(0)
+        self.buf_spin.setToolTip("separação mínima garantida entre treino e validação. "
+                                 "0 mantém o comportamento anterior.")
+        buf_row.addWidget(self.buf_spin)
+        L.addLayout(buf_row)
+
         # nível de treino: classes finas | superclasses | personalizado (colapsa por super)
         lvl_row = QHBoxLayout()
         lvl_row.addWidget(QLabel("nível"))
@@ -115,6 +137,10 @@ class TrainPanel(QWidget):
     def params(self):
         """(learning rate, epochs, folds) escolhidos."""
         return self.lr_spin.value(), self.ep_spin.value(), self.fold_spin.value()
+
+    def cv_config(self):
+        """(n_blocks, buffer_px) da spatial-CV. n_blocks None = automático."""
+        return (self.blk_spin.value() or None), float(self.buf_spin.value())
 
     def set_superclasses(self, super_members):
         """super_members: {super: [classes...]}. Cria um checkbox de colapso por super
