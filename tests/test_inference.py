@@ -46,6 +46,24 @@ def test_classify_block_masks_incomplete_and_classifies():
     assert calls["read"] == (3, 3) and calls["infer"] == 8  # callbacks disparam
 
 
+def test_classify_block_respects_declared_bands_without_ndvi():
+    """Projeto SAR: 2 canais declarados sem red/NIR — o kernel monta X com os
+    canais do cubo e um modelo de 2 canais aplica sem NDVI no meio."""
+    rng = np.random.default_rng(1)
+    n = 60
+    cur = rng.random((n, 2, 12)).astype("float32")
+    y = np.array([0] * 30 + [1] * 30)
+    cur[y == 1] += 0.6
+    X = trainer.build_X(cur, bands=["VV", "VH"])
+    net, mu, sd = trainer.fit(X, y, 2, lr=1e-2, epochs=25)
+    block = rng.random((2, 2, 12, 2)).astype("float32")
+    fake = _FakeTS(block)
+    fake.band_names = ["VV", "VH"]
+    ci, valid, dims = classify_block(fake, net, mu, sd, 0, 0, 2, 2)
+    assert dims == (2, 2) and valid.all()
+    assert ci.shape == (4,) and set(ci.tolist()) <= {0, 1}
+
+
 def test_classify_block_all_invalid_returns_empty():
     block = np.full((2, 2, 12, 4), np.nan, "float32")
     ci, valid, dims = classify_block(_FakeTS(block), None, None, None, 0, 0, 2, 2)

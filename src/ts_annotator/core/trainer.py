@@ -1,7 +1,9 @@
 """Trainer — IT (InceptionTime-style temporal CNN) na GPU + spatial-CV + cleanlab.
 
-Reaproveita a arquitetura oficial do pipeline (IM/IT). Treina nas 5 channels
-(4 bandas + NDVI) x 12 meses. spatial_cv faz GroupKFold por grupo espacial ->
+Reaproveita a arquitetura oficial do pipeline (IM/IT). Treina nos canais que o
+projeto declara — as bandas do cubo, mais NDVI derivado quando red/NIR estão
+entre elas (o legado B,G,R,NIR vira 5 canais, um projeto SAR VV/VH treina nos
+2). spatial_cv faz GroupKFold por grupo espacial ->
 predições out-of-fold -> métricas honestas; cleanlab ranqueia prováveis erros
 de rótulo a partir dessas probas OOF.
 """
@@ -47,11 +49,21 @@ class IT(nn.Module):
         return self.fc(self.dr(self.g(x).squeeze(-1)))
 
 
-def build_X(cur4):
-    """(N,4,meses) reflectância -> (N,5,meses) com NDVI como 5º canal."""
-    from ts_annotator.core.features import NIR_IDX, RED_IDX
-    c = np.asarray(cur4, "float32")
-    nd = np.clip((c[:, NIR_IDX] - c[:, RED_IDX]) / (c[:, NIR_IDX] + c[:, RED_IDX] + 1e-6), -1, 1)
+def build_X(cur, bands=None):
+    """(N,canais,meses) -> X de treino, com NDVI anexado quando há red/NIR.
+
+    ``bands`` são os NOMES declarados no projeto: com red e NIR entre eles, o
+    NDVI entra como canal extra, calculado das posições nomeadas; sem o par
+    (ex.: SAR VV/VH), os canais do cubo entram como estão. ``bands=None`` é o
+    contrato legado B,G,R,NIR, que segue anexando NDVI de 2/3.
+    """
+    from ts_annotator.core.features import NIR_IDX, RED_IDX, ndvi_pair
+    c = np.asarray(cur, "float32")
+    pair = (RED_IDX, NIR_IDX) if bands is None else ndvi_pair(bands)
+    if pair is None:
+        return c
+    r, n = pair
+    nd = np.clip((c[:, n] - c[:, r]) / (c[:, n] + c[:, r] + 1e-6), -1, 1)
     return np.concatenate([c, nd[:, None]], 1).astype("float32")
 
 

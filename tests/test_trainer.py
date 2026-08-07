@@ -13,6 +13,24 @@ def test_build_X_adds_ndvi_channel():
     assert X.shape == (7, 5, 12)  # 4 bandas + NDVI
 
 
+def test_build_X_without_red_nir_passes_channels_through():
+    """Projeto SAR: bandas declaradas sem red/NIR -> canais entram como estão."""
+    sar = np.random.rand(5, 2, 12).astype("float32")
+    X = build_X(sar, bands=["VV", "VH"])
+    assert X.shape == (5, 2, 12)
+    assert np.allclose(X, sar)
+
+
+def test_build_X_derives_ndvi_from_declared_band_names():
+    """red/NIR achados pelo NOME das bandas declaradas, não pela posição 2/3."""
+    cur = np.random.rand(3, 4, 12).astype("float32")
+    X = build_X(cur, bands=["NIR", "Red", "G", "B"])
+    assert X.shape == (3, 5, 12)
+    nir, red = cur[:, 0], cur[:, 1]
+    esperado = np.clip((nir - red) / (nir + red + 1e-6), -1, 1)
+    assert np.allclose(X[:, 4], esperado, atol=1e-6)
+
+
 def test_fit_progress_reports_epoch_and_loss():
     X = build_X(np.random.rand(40, 4, 12).astype("float32"))
     y = np.array([0, 1] * 20)

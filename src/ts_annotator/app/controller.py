@@ -299,7 +299,7 @@ class AnnotatorController:
         if not np.isfinite(curve).all():   # nodata parcial -> softmax NaN; igual ao batch, não prevê
             return None
         from ts_annotator.core import trainer as _tr
-        X = _tr.build_X(curve.T[None])
+        X = _tr.build_X(curve.T[None], bands=getattr(self.ts, "band_names", None))
         pr = _tr.predict_proba(net, self.tstate["mu"], self.tstate["sd"], X)[0]
         labs = self.tstate["labs"]
         return {labs[i]: float(pr[i]) for i in range(len(labs))}
@@ -1394,6 +1394,7 @@ class AnnotatorController:
             note += f" — escopo: {len(tiles)} tile(s)"
         job = {"model_path": mp, "pred": pred, "tiles": tiles,
                "month_paths": list(self.ts.paths), "bands": list(self.ts.bands),
+               "band_names": getattr(self.ts, "band_names", None),
                "row_offsets": list(self.ts.row_offsets), "col_offsets": list(self.ts.col_offsets),
                "nodata": self.ts.nodata, "scale": self.ts.scale,
                "width": self.class_src.width, "height": self.class_src.height}
@@ -1611,7 +1612,8 @@ class AnnotatorController:
 
         # treino threaded (GPU)
         self.tthread = QThread()
-        self.tworker = TrainWorker(self.store, self.fx)
+        self.tworker = TrainWorker(self.store, self.fx,
+                                   band_names=getattr(self.ts, "band_names", None))
         self.tworker.moveToThread(self.tthread)
         self.tthread.start()
         self.tworker.done.connect(self.on_train_done)

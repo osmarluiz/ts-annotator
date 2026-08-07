@@ -35,6 +35,20 @@ DRY_MONTHS = (8, 9, 10, 11)  # Jun, Jul, Ago, Set (índices 0=Out..11=Set)
 # usados por features e trainer (antes estavam espalhados/hardcoded)
 RED_IDX, NIR_IDX = 2, 3
 
+# nomes que resolvem o par red/NIR quando o projeto declara bandas por NOME
+RED_NAMES = {"r", "red"}
+NIR_NAMES = {"nir"}
+
+
+def ndvi_pair(band_names):
+    """(índice do red, índice do NIR) pelos NOMES declarados, ou None sem o par."""
+    if not band_names:
+        return None
+    low = [str(b).strip().lower() for b in band_names]
+    r = next((i for i, b in enumerate(low) if b in RED_NAMES), None)
+    n = next((i for i, b in enumerate(low) if b in NIR_NAMES), None)
+    return None if r is None or n is None else (r, n)
+
 
 def to_ndvi(curve) -> np.ndarray:
     """Aceita (meses,4)=B,G,R,NIR (reflectância) ou (meses,)=NDVI. Retorna NDVI (meses,)."""

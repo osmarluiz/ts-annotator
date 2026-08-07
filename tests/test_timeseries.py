@@ -1,8 +1,31 @@
 """Testes do TimeSeriesSource — lê curva no pixel, nodata->NaN, fora->NaN."""
 import numpy as np
+import pytest
 import rasterio
 
-from ts_annotator.core.timeseries import TimeSeriesSource
+from ts_annotator.core.timeseries import TimeSeriesSource, parse_bands
+
+
+def test_parse_bands_names_give_indices_in_order():
+    """Nomes declarados: índices de leitura são 1..n na ordem do arquivo."""
+    idx, names = parse_bands(["VV", "VH"])
+    assert idx == (1, 2) and names == ["VV", "VH"]
+
+
+def test_parse_bands_legacy_ints_keep_the_optical_contract():
+    """Quatro índices (o padrão de sempre) continuam valendo B,G,R,NIR."""
+    idx, names = parse_bands([1, 2, 3, 4])
+    assert idx == (1, 2, 3, 4) and names == ["B", "G", "R", "NIR"]
+
+
+def test_parse_bands_ints_not_four_have_no_names():
+    idx, names = parse_bands([2, 3])
+    assert idx == (2, 3) and names is None
+
+
+def test_parse_bands_mixed_is_an_error():
+    with pytest.raises(ValueError, match="bands"):
+        parse_bands([1, "R"])
 
 
 def _make_month(path, red, nir, w=10, h=10):

@@ -61,7 +61,8 @@ The panel shows *labels since last training* — when that grows, retrain.
 
 Needs ≥ 30 points with valid curves (the tab shows your count). Training runs
 on the GPU off the UI thread: an InceptionTime-style temporal CNN over the
-4 bands + NDVI, evaluated with **stratified spatial cross-validation**
+declared bands (plus NDVI as an extra channel when red and NIR are among
+them), evaluated with **stratified spatial cross-validation**
 (k-means spatial blocks; test folds are spatially separated from training, so
 the reported balanced accuracy and macro-F1 are honest), then refit on all
 points. cleanlab ranks likely label errors from the out-of-fold probabilities.

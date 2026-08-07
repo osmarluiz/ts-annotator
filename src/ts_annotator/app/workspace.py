@@ -40,7 +40,7 @@ from ts_annotator.core.features import make_extractor
 from ts_annotator.core.raster_source import RasterSource
 from ts_annotator.core.selection import SelectionEngine
 from ts_annotator.core.similarity import SimilarityEngine
-from ts_annotator.core.timeseries import TimeSeriesSource
+from ts_annotator.core.timeseries import TimeSeriesSource, parse_bands
 
 _VECTOR_EXTS = (".gpkg", ".geojson", ".json", ".shp")
 _FALLBACK_COLORS = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4",
@@ -128,9 +128,16 @@ def _build_timeseries(project_dir, cfg):
             raise WorkspaceError(
                 f"timeseries.{key} tem {len(v)} valores mas há {len(paths)} meses")
         return [int(x) for x in v]
+    # bands aceita NOMES ("VV", "R", "NIR"...) ou índices de raster; os nomes
+    # dizem o que cada canal É e decidem se há NDVI derivado no treino.
+    try:
+        band_idx, band_names = parse_bands(tcfg.get("bands", (1, 2, 3, 4)))
+    except ValueError as e:
+        raise WorkspaceError(str(e))
     return TimeSeriesSource(
         paths,
-        bands=tuple(tcfg.get("bands", (1, 2, 3, 4))),
+        bands=band_idx,
+        band_names=band_names,
         row_offsets=_offsets("row_offsets"),
         col_offsets=_offsets("col_offsets"),
         nodata=tcfg.get("nodata", 65535),

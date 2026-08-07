@@ -55,8 +55,9 @@ label is worth placing, and the classification updates without leaving the windo
 7. **Proposes where to look next.** Ranks candidates by confidence, margin, entropy,
    disagreement, similarity or novelty, and picks a batch with spatial and feature
    diversity, so ten suggestions are not ten pixels of the same field.
-8. **Trains in the window.** An InceptionTime-style temporal CNN over the reflectance
-   bands plus NDVI, under stratified grouped cross-validation on spatial clusters, so a
+8. **Trains in the window.** An InceptionTime-style temporal CNN over the channels the
+   project declares — the bands of the cube, plus NDVI derived when red and NIR are
+   among them — under stratified grouped cross-validation on spatial clusters, so a
    held-out point is not the neighbour of a training point.
 9. **Ranks your labels by how likely each is to be wrong.** Confident-learning scores
    from the out-of-fold probabilities.

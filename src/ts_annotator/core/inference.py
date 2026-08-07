@@ -32,6 +32,7 @@ def classify_block(ts, net, mu, sd, row0, col0, h, w, step=1, batch=8192,
         return np.zeros(0, np.int64), valid, (Hs, Ws)
     if before_infer is not None:
         before_infer(int(valid.sum()))
-    X = trainer.build_X(np.transpose(flat[valid], (0, 2, 1)))
+    X = trainer.build_X(np.transpose(flat[valid], (0, 2, 1)),
+                        bands=getattr(ts, "band_names", None))
     proba = trainer.predict_proba(net, mu, sd, X, batch=batch)
     return proba.argmax(1), valid, (Hs, Ws)

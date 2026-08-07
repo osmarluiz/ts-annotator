@@ -11,11 +11,31 @@ import rasterio
 from rasterio.windows import Window
 
 
+def parse_bands(raw):
+    """``timeseries.bands`` do projeto -> ``(índices de leitura, nomes ou None)``.
+
+    Nomes (strings) declaram o que cada canal do cubo É, na ordem do arquivo, e
+    os índices de leitura viram 1..n. Inteiros são o formato original, índices
+    de banda do raster; quatro deles continuam valendo o contrato óptico
+    B,G,R,NIR de sempre, e qualquer outra contagem fica sem nomes. Misturar os
+    dois é erro.
+    """
+    raw = list(raw)
+    if raw and all(isinstance(b, str) for b in raw):
+        return tuple(range(1, len(raw) + 1)), [str(b) for b in raw]
+    if all(isinstance(b, int) for b in raw):
+        names = ["B", "G", "R", "NIR"] if len(raw) == 4 else None
+        return tuple(raw), names
+    raise ValueError(
+        f"timeseries.bands mistura nomes e índices: {raw!r} — use só strings ou só ints")
+
+
 class TimeSeriesSource:
     def __init__(
         self,
         month_paths,
         bands=(1, 2, 3, 4),
+        band_names=None,
         row_offsets=None,
         col_offsets=None,
         nodata=65535,
@@ -23,6 +43,7 @@ class TimeSeriesSource:
     ):
         self.paths = list(month_paths)
         self.bands = list(bands)
+        self.band_names = list(band_names) if band_names is not None else None
         n = len(self.paths)
         self.row_offsets = list(row_offsets) if row_offsets is not None else [0] * n
         self.col_offsets = list(col_offsets) if col_offsets is not None else [0] * n

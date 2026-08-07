@@ -13,10 +13,11 @@ class TrainWorker(QObject):
     step = pyqtSignal(dict)     # {phase, frac, fold, k, epoch, epochs, loss, fold_bacc}
     _go = pyqtSignal()
 
-    def __init__(self, store, fx):
+    def __init__(self, store, fx, band_names=None):
         super().__init__()
         self.store = store
         self.fx = fx
+        self.band_names = band_names
         self.lr = 1e-3
         self.epochs = 120
         self.folds = 5
@@ -76,7 +77,7 @@ class TrainWorker(QObject):
             groups = trainer.spatial_blocks(coords, self.folds, self.n_blocks)
             labs = sorted(set(ylab))
             y = np.array([labs.index(c) for c in ylab])
-            X = trainer.build_X(cur4)
+            X = trainer.build_X(cur4, bands=self.band_names)
             self.prog.emit("spatial-CV (GPU)…")
             # progresso global: CV (k folds × E épocas) + fit final (E épocas)
             total = (self.folds + 1) * self.epochs
@@ -188,6 +189,7 @@ class ClassifyAllWorker(QObject):
         self.prog.emit("carregando modelo…", int(100 * k0 / max(total, 1)))
         net, mu, sd, _labs = trainer.load_model(j["model_path"])
         ts = TimeSeriesSource(j["month_paths"], bands=j["bands"],
+                              band_names=j.get("band_names"),
                               row_offsets=j["row_offsets"], col_offsets=j["col_offsets"],
                               nodata=j["nodata"], scale=j["scale"])
         t0 = time.time()
