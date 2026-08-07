@@ -67,18 +67,40 @@ def build_X(cur, bands=None):
     return np.concatenate([c, nd[:, None]], 1).astype("float32")
 
 
+class SKModel:
+    """Estimador de curva achatada (interface sklearn) sob o contrato do trainer.
+
+    predict_proba recebe o X JÁ padronizado e achatado — quem achata é o
+    predict_proba de módulo, para o resto do código não saber a diferença."""
+
+    def __init__(self, est, arch):
+        self.est = est
+        self._tsa_arch = arch
+
+
 def fit(Xt, yt, nc, lr=1e-3, epochs=200, mu=None, sd=None, progress=None, arch=None):
     """progress(epoch, epochs, loss) — chamado A CADA época com a loss média
     (acumulada no device, 1 sync/época; custo ~zero) p/ a curva de treino.
 
-    ``arch`` escolhe a rede pelo nome do catálogo (None = a IT de sempre)."""
-    from ts_annotator.core.architectures import build
+    ``arch`` escolhe pelo nome do catálogo (None = a IT de sempre). Um nome da
+    família de estimadores treina na curva achatada, sem laço de épocas."""
+    from ts_annotator.core import architectures
     if mu is None:
         mu = Xt.mean((0, 2), keepdims=True)
         sd = Xt.std((0, 2), keepdims=True) + 1e-6
+    if architectures.kind(arch) == "estimator":
+        from sklearn.utils.class_weight import compute_sample_weight
+        est = architectures.build_estimator(arch)
+        Xf = ((np.asarray(Xt, "float32") - mu) / sd).reshape(len(Xt), -1)
+        est.fit(Xf, yt, sample_weight=compute_sample_weight("balanced", yt))
+        if progress:
+            progress(1, 1, 0.0)   # sem épocas: um tique fecha a barra
+        m = SKModel(est, arch)
+        m._tsa_seq_len = int(Xt.shape[2])
+        return m, mu, sd
     cw = torch.tensor([len(yt) / (nc * max((yt == i).sum(), 1)) for i in range(nc)],
                       dtype=torch.float32, device=DEV)
-    net = build(arch, Xt.shape[1], nc, seq_len=Xt.shape[2]).to(DEV)
+    net = architectures.build(arch, Xt.shape[1], nc, seq_len=Xt.shape[2]).to(DEV)
     # o checkpoint precisa da arquitetura e do seq_len p/ reconstruir a rede;
     # ficam na própria rede porque save_model não vê o X de treino
     net._tsa_arch = arch or "it"
@@ -109,6 +131,11 @@ def fit(Xt, yt, nc, lr=1e-3, epochs=200, mu=None, sd=None, progress=None, arch=N
 
 
 def predict_proba(net, mu, sd, X, batch=8192):
+    if isinstance(net, SKModel):
+        if len(X) == 0:
+            return np.zeros((0, len(getattr(net.est, "classes_", ()))), "float32")
+        Xf = ((np.asarray(X, "float32") - mu) / sd).reshape(len(X), -1)
+        return net.est.predict_proba(Xf).astype("float32")
     # fp16/autocast na GPU: ~2x mais rápido na inferência (tensor cores), argmax
     # idêntico. Igual ao kernel otimizado do wall-to-wall. CPU cai no fp32 normal.
     out = []
@@ -217,11 +244,19 @@ def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_
 
 
 def save_model(net, mu, sd, labs, path, arch=None):
-    """Salva pesos + normalização + classes + arquitetura (modelo re-aplicável)."""
-    torch.save({"state": net.state_dict(), "mu": mu, "sd": sd,
-                "labs": list(labs), "ic": int(np.asarray(mu).shape[1]),
-                "arch": arch or getattr(net, "_tsa_arch", "it"),
-                "seq_len": getattr(net, "_tsa_seq_len", None)}, path)
+    """Salva pesos + normalização + classes + arquitetura (modelo re-aplicável).
+
+    Estimadores vão picklados inteiros (chave ``est``); redes torch vão como
+    state_dict. Um arquivo só, o mesmo model.pt, para o VersionStore e o sidecar
+    da predição não saberem a diferença."""
+    doc = {"mu": mu, "sd": sd, "labs": list(labs), "ic": int(np.asarray(mu).shape[1]),
+           "arch": arch or getattr(net, "_tsa_arch", "it"),
+           "seq_len": getattr(net, "_tsa_seq_len", None)}
+    if isinstance(net, SKModel):
+        doc["est"] = net.est
+    else:
+        doc["state"] = net.state_dict()
+    torch.save(doc, path)
 
 
 def load_model(path):
@@ -231,6 +266,8 @@ def load_model(path):
     from ts_annotator.core.architectures import build
     ck = torch.load(path, map_location=DEV, weights_only=False)
     labs = ck["labs"]
+    if "est" in ck:
+        return SKModel(ck["est"], ck.get("arch")), ck["mu"], ck["sd"], labs
     net = build(ck.get("arch", "it"), ck["ic"], len(labs), seq_len=ck.get("seq_len")).to(DEV)
     net.load_state_dict(ck["state"])
     net.eval()

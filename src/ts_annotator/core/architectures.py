@@ -1,6 +1,6 @@
-"""Quais redes o treinador pode instanciar.
+"""O que o treinador pode instanciar: redes torch e estimadores de curva achatada.
 
-Duas fontes. A PRIMEIRA e' a InceptionTime escrita aqui (`it`), que continua sendo
+Tres fontes. A PRIMEIRA e' a InceptionTime escrita aqui (`it`), que continua sendo
 o padrao e cujos pesos ja' salvos precisam seguir carregando — por isso ela nao
 foi trocada pela homonima do tsai, que tem outra estrutura de camadas e nao leria
 um checkpoint antigo.
@@ -13,12 +13,61 @@ escolhas encolhe em vez de o programa quebrar.
 Os modelos do tsai sao nn.Module comuns. O laco de treino, os pesos por classe, o
 agendador e a validacao cruzada continuam sendo os daqui: o tsai entra so' como
 catalogo de arquiteturas, nao como framework de treino.
+
+A TERCEIRA e' a familia de ESTIMADORES (`kind() == "estimator"`): classificadores
+com a interface do scikit-learn sobre a curva achatada (canais x datas viram um
+vetor). O scikit-learn ja' e' dependencia; o XGBoost e' opcional como o tsai. A
+validacao cruzada espacial e o cleanlab valem igual, porque so' pedem
+predict_proba.
 """
 from __future__ import annotations
 
+import importlib
 import inspect
 
 BUILTIN = "it"
+
+# nome -> (modulo, classe, kwargs). O desbalanceio e' tratado no fit com
+# sample_weight balanceado, uniforme entre eles (por isso sem class_weight aqui).
+_ESTIMATORS = {
+    "random_forest": ("sklearn.ensemble", "RandomForestClassifier",
+                      {"n_estimators": 300, "n_jobs": -1}),
+    "extra_trees": ("sklearn.ensemble", "ExtraTreesClassifier",
+                    {"n_estimators": 300, "n_jobs": -1}),
+    "hist_gradient_boosting": ("sklearn.ensemble", "HistGradientBoostingClassifier", {}),
+    "xgboost": ("xgboost", "XGBClassifier",
+                {"n_estimators": 300, "tree_method": "hist", "eval_metric": "logloss"}),
+}
+
+
+def has_xgboost() -> bool:
+    try:
+        importlib.import_module("xgboost")
+        return True
+    except Exception:
+        return False
+
+
+def estimators():
+    """Nomes de estimador instanciaveis agora (xgboost so' se o pacote existir)."""
+    return [n for n in _ESTIMATORS if n != "xgboost"] + (["xgboost"] if has_xgboost() else [])
+
+
+def kind(arch) -> str:
+    """'estimator' para os de curva achatada, 'torch' para todo o resto."""
+    return "estimator" if arch in _ESTIMATORS else "torch"
+
+
+def build_estimator(arch):
+    """Instancia um estimador do registro pelo nome."""
+    mod, cls, kw = _ESTIMATORS[arch]
+    try:
+        m = importlib.import_module(mod)
+    except ImportError:
+        raise ValueError(
+            f"{arch} exige o pacote {mod.split('.')[0]}, que nao esta instalado "
+            f"(pip install {mod.split('.')[0]})")
+    return getattr(m, cls)(**kw)
 
 
 def _tsai_models():
@@ -39,8 +88,8 @@ def _tsai_models():
 
 
 def available():
-    """Arquiteturas instanciaveis agora, `it` sempre primeiro."""
-    return [BUILTIN] + sorted(_tsai_models())
+    """Tudo que e' instanciavel agora, `it` sempre primeiro."""
+    return [BUILTIN] + sorted(_tsai_models()) + estimators()
 
 
 def has_tsai() -> bool:

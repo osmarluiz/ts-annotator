@@ -36,11 +36,16 @@ class TrainPanel(QWidget):
         model_row = QHBoxLayout()
         model_row.addWidget(QLabel("modelo"))
         self.model_combo = QComboBox()
-        # o catálogo é a IT nativa + o que o tsai (opcional) exportar; sem tsai
-        # sobra um item e o combo se comporta como antes
+        # o catálogo é a IT nativa + o que o tsai (opcional) exportar + os
+        # estimadores sklearn/xgboost; sem os opcionais a lista só encolhe
         from ts_annotator.core.architectures import available
+        nice = {"it": "InceptionTime (IT)",
+                "random_forest": "Random Forest (scikit-learn)",
+                "extra_trees": "Extra Trees (scikit-learn)",
+                "hist_gradient_boosting": "Gradient Boosting (scikit-learn)",
+                "xgboost": "XGBoost"}
         for a in available():
-            self.model_combo.addItem("InceptionTime (IT)" if a == "it" else a, a)
+            self.model_combo.addItem(nice.get(a, a), a)
         model_row.addWidget(self.model_combo, 1)
         L.addLayout(model_row)
 
