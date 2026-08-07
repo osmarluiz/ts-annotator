@@ -1502,7 +1502,7 @@ class AnnotatorController:
                 },
             }
             name, mpath = VersionStore(self.model_dir).save_version(
-                res["net"], res["mu"], res["sd"], res["labs"], meta)
+                res["net"], res["mu"], res["sd"], res["labs"], meta, arch=res.get("arch"))
             saved_name = name
             # congela o dataset da versão: move o snapshot (tirado no início do
             # treino) pra dentro do dir da versão → models/it_vN/dataset.json é o
@@ -1597,7 +1597,7 @@ class AnnotatorController:
         self.train_win.start(f"spatial-CV {folds} folds · {ep} épocas · lr {lr}")
         nblk, buf = self.train.cv_config()
         self.tworker.start(lr, ep, folds, self.class_super, collapsed,
-                           n_blocks=nblk, buffer_px=buf)
+                           n_blocks=nblk, buffer_px=buf, arch=self.train.model_type())
 
     # =====================================================================
     # Workers / threads (chamado pela janela DEPOIS de construir os widgets)

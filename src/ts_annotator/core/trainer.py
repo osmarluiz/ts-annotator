@@ -67,15 +67,22 @@ def build_X(cur, bands=None):
     return np.concatenate([c, nd[:, None]], 1).astype("float32")
 
 
-def fit(Xt, yt, nc, lr=1e-3, epochs=200, mu=None, sd=None, progress=None):
+def fit(Xt, yt, nc, lr=1e-3, epochs=200, mu=None, sd=None, progress=None, arch=None):
     """progress(epoch, epochs, loss) — chamado A CADA época com a loss média
-    (acumulada no device, 1 sync/época; custo ~zero) p/ a curva de treino."""
+    (acumulada no device, 1 sync/época; custo ~zero) p/ a curva de treino.
+
+    ``arch`` escolhe a rede pelo nome do catálogo (None = a IT de sempre)."""
+    from ts_annotator.core.architectures import build
     if mu is None:
         mu = Xt.mean((0, 2), keepdims=True)
         sd = Xt.std((0, 2), keepdims=True) + 1e-6
     cw = torch.tensor([len(yt) / (nc * max((yt == i).sum(), 1)) for i in range(nc)],
                       dtype=torch.float32, device=DEV)
-    net = IT(Xt.shape[1], nc).to(DEV)
+    net = build(arch, Xt.shape[1], nc, seq_len=Xt.shape[2]).to(DEV)
+    # o checkpoint precisa da arquitetura e do seq_len p/ reconstruir a rede;
+    # ficam na própria rede porque save_model não vê o X de treino
+    net._tsa_arch = arch or "it"
+    net._tsa_seq_len = int(Xt.shape[2])
     opt = torch.optim.AdamW(net.parameters(), lr, weight_decay=1e-2)
     sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, epochs)
     lf = nn.CrossEntropyLoss(weight=cw, label_smoothing=0.05)
@@ -112,7 +119,10 @@ def predict_proba(net, mu, sd, X, batch=8192):
             with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
                 logits = net(xb)
             out.append(torch.softmax(logits.float(), 1).cpu().numpy())
-    return np.concatenate(out) if out else np.zeros((0, net.fc.out_features), "float32")
+    if out:
+        return np.concatenate(out)
+    nf = net.fc.out_features if hasattr(net, "fc") else 0   # redes do tsai podem não ter .fc
+    return np.zeros((0, nf), "float32")
 
 
 def spatial_blocks(coords, folds=5, n_blocks=None, seed=0):
@@ -139,7 +149,7 @@ def _nearest_dist(a, b):
 
 
 def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_cb=None,
-               coords=None, buffer_px=0.0):
+               coords=None, buffer_px=0.0, arch=None):
     """spatial-CV ESTRATIFICADA (StratifiedGroupKFold) -> OOF + métricas.
 
     progress(fold, k, fold_bacc) ao fim de cada fold (métrica incremental);
@@ -187,7 +197,7 @@ def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_
             d = _nearest_dist(C[va], C[tr])
             seps.append(float(d.min()) if len(d) else np.inf)
         _ec = (lambda e, E, loss, _f=fi: epoch_cb(_f + 1, k, e, E, loss)) if epoch_cb else None
-        net, mu, sd = fit(X[tr], y[tr], nc, lr, epochs, progress=_ec)
+        net, mu, sd = fit(X[tr], y[tr], nc, lr, epochs, progress=_ec, arch=arch)
         oof[va] = predict_proba(net, mu, sd, X[va])
         if progress:
             fb = float(balanced_accuracy_score(y[va], oof[va].argmax(1)))
@@ -206,17 +216,22 @@ def spatial_cv(X, y, groups, nc, lr=1e-3, epochs=200, k=5, progress=None, epoch_
     }
 
 
-def save_model(net, mu, sd, labs, path):
-    """Salva pesos + normalização + classes (modelo re-aplicável)."""
+def save_model(net, mu, sd, labs, path, arch=None):
+    """Salva pesos + normalização + classes + arquitetura (modelo re-aplicável)."""
     torch.save({"state": net.state_dict(), "mu": mu, "sd": sd,
-                "labs": list(labs), "ic": net.bk[0].b.in_channels}, path)
+                "labs": list(labs), "ic": int(np.asarray(mu).shape[1]),
+                "arch": arch or getattr(net, "_tsa_arch", "it"),
+                "seq_len": getattr(net, "_tsa_seq_len", None)}, path)
 
 
 def load_model(path):
-    """Carrega -> (net, mu, sd, labs) pronto p/ predict_proba."""
+    """Carrega -> (net, mu, sd, labs) pronto p/ predict_proba.
+
+    A arquitetura vem do checkpoint; um checkpoint antigo, sem a chave, é IT."""
+    from ts_annotator.core.architectures import build
     ck = torch.load(path, map_location=DEV, weights_only=False)
     labs = ck["labs"]
-    net = IT(ck["ic"], len(labs)).to(DEV)
+    net = build(ck.get("arch", "it"), ck["ic"], len(labs), seq_len=ck.get("seq_len")).to(DEV)
     net.load_state_dict(ck["state"])
     net.eval()
     return net, ck["mu"], ck["sd"], labs

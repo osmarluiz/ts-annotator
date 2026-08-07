@@ -12,7 +12,7 @@ def fake_trainer(monkeypatch):
     """save_version importa o trainer (torch) lazy — stub p/ testar sem GPU/torch."""
     mod = types.ModuleType("ts_annotator.core.trainer")
 
-    def save_model(net, mu, sd, labs, path):
+    def save_model(net, mu, sd, labs, path, arch=None):
         with open(path, "wb") as f:
             f.write(b"weights:" + ",".join(labs).encode())
 
@@ -38,6 +38,19 @@ def test_save_list_latest(tmp_path, fake_trainer):
     m = vers[-1]["meta"]
     assert m["labs"] == ["a", "b"] and m["n_points"] == 12
     assert m["model_sha1"] == file_sha1(p2)
+
+
+def test_versions_span_architectures_with_global_numbering(tmp_path, fake_trainer):
+    """Versões de arquiteturas diferentes convivem: a listagem vê todas e o
+    número é global, então fcn_v2 vem depois de it_v1 e nunca colide."""
+    vs = VersionStore(str(tmp_path))
+    n1, _ = vs.save_version(None, None, None, ["a"], {})
+    n2, _ = vs.save_version(None, None, None, ["a"], {}, arch="fcn")
+    assert (n1, n2) == ("it_v1", "fcn_v2")
+    vers = vs.list_versions()
+    assert [v["name"] for v in vers] == ["it_v1", "fcn_v2"]
+    assert vers[-1]["meta"]["type"] == "fcn"
+    assert vs.next_name() == "it_v3"
 
 
 def test_corrupt_meta_is_ignored(tmp_path, fake_trainer):

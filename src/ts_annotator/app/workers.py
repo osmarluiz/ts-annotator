@@ -28,10 +28,11 @@ class TrainWorker(QObject):
         self._go.connect(self._run)
 
     def start(self, lr, epochs, folds, class_super=None, collapsed=None,
-              n_blocks=None, buffer_px=0.0):
+              n_blocks=None, buffer_px=0.0, arch=None):
         from collections import Counter
         self.lr, self.epochs, self.folds = lr, epochs, folds
         self.n_blocks, self.buffer_px = n_blocks, float(buffer_px or 0.0)
+        self.arch = arch
         self.class_super = dict(class_super or {})
         self.collapsed = set(collapsed or ())
         # supers "de grupo" (>1 membro fino) — um rótulo com esse nome é um SUPER-rótulo
@@ -93,7 +94,7 @@ class TrainWorker(QObject):
 
             res = trainer.spatial_cv(X, y, groups, len(labs), lr=self.lr, epochs=self.epochs,
                                      k=self.folds, progress=_cv_fold, epoch_cb=_cv_epoch,
-                                     coords=coords, buffer_px=self.buffer_px)
+                                     coords=coords, buffer_px=self.buffer_px, arch=self.arch)
             self.prog.emit("cleanlab: analisando qualidade dos rótulos…")
             self.step.emit({"phase": "cleanlab", "frac": self.folds * self.epochs / total})
             scores, issues = trainer.label_scores(y, res["oof_proba"])
@@ -103,7 +104,7 @@ class TrainWorker(QObject):
                                 "frac": (self.folds * self.epochs + e) / total})
 
             net, mu, sd = trainer.fit(X, y, len(labs), lr=self.lr, epochs=self.epochs,
-                                      progress=_fit_epoch)
+                                      progress=_fit_epoch, arch=self.arch)
             # store de ORIGEM vai junto: o usuário pode trocar de dataset durante os
             # minutos de treino — o writeback das métricas tem que ir no store em que
             # o snapshot foi tirado (ids colidem entre datasets). params/anno_hash/
@@ -111,7 +112,9 @@ class TrainWorker(QObject):
             from ts_annotator.core.version_store import anno_hash
             res.update(labs=labs, y=y, scores=scores, issues=issues,
                        net=net, mu=mu, sd=sd, ids=[p["id"] for p in pts], store=store,
-                       params={"lr": self.lr, "epochs": self.epochs, "folds": self.folds},
+                       arch=self.arch or "it",
+                       params={"lr": self.lr, "epochs": self.epochs, "folds": self.folds,
+                               "arch": self.arch or "it"},
                        n_points=len(pts), anno_hash=anno_hash(pts),
                        collapsed=sorted(self.collapsed),   # supers colapsados neste treino
                        confusion=res["confusion"].tolist())

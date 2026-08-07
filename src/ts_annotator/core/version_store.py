@@ -69,16 +69,19 @@ def model_stem(model_path) -> str:
 
 
 class VersionStore:
+    # a versão é <arquitetura>_vN; a listagem vê TODAS as arquiteturas e o
+    # número é global, então trocar de rede nunca colide nem esconde versão
+    _RX = re.compile(r"^(\w+)_v(\d+)$")
+
     def __init__(self, model_dir, prefix="it"):
         self.dir = model_dir
         self.prefix = prefix
-        self._rx = re.compile(rf"^{re.escape(prefix)}_v(\d+)$")
 
     def list_versions(self):
-        """[{name, num, path (model.pt), meta (dict|None)}] em ordem de versão."""
+        """[{name, num, arch, path (model.pt), meta (dict|None)}] em ordem de versão."""
         out = []
-        for d in glob.glob(os.path.join(self.dir, f"{self.prefix}_v*")):
-            m = self._rx.match(os.path.basename(d))
+        for d in glob.glob(os.path.join(self.dir, "*_v*")):
+            m = self._RX.match(os.path.basename(d))
             mp = os.path.join(d, "model.pt")
             if not m or not os.path.exists(mp):
                 continue
@@ -90,8 +93,8 @@ class VersionStore:
                 pass
             if not isinstance(meta, dict):
                 meta = None   # yaml truncado que parseia como escalar não pode virar .get()
-            out.append({"name": os.path.basename(d), "num": int(m.group(1)),
-                        "path": mp, "meta": meta})
+            out.append({"name": os.path.basename(d), "num": int(m.group(2)),
+                        "arch": m.group(1), "path": mp, "meta": meta})
         return sorted(out, key=lambda v: v["num"])
 
     def latest(self):
@@ -99,19 +102,20 @@ class VersionStore:
         vs = self.list_versions()
         return vs[-1]["path"] if vs else None
 
-    def next_name(self):
+    def next_name(self, arch=None):
         vs = self.list_versions()
-        return f"{self.prefix}_v{(vs[-1]['num'] + 1) if vs else 1}"
+        return f"{arch or self.prefix}_v{(vs[-1]['num'] + 1) if vs else 1}"
 
-    def save_version(self, net, mu, sd, labs, meta=None):
+    def save_version(self, net, mu, sd, labs, meta=None, arch=None):
         """Salva pesos + meta.yaml numa versão NOVA. Retorna (nome, caminho do .pt)."""
         from ts_annotator.core import trainer
-        name = self.next_name()
+        arch = arch or self.prefix
+        name = self.next_name(arch)
         vdir = os.path.join(self.dir, name)
         os.makedirs(vdir, exist_ok=True)
         mpath = os.path.join(vdir, "model.pt")
-        trainer.save_model(net, mu, sd, labs, mpath)
-        doc = {"format": 1, "name": name, "type": self.prefix,
+        trainer.save_model(net, mu, sd, labs, mpath, arch=arch)
+        doc = {"format": 1, "name": name, "type": arch,
                "created": datetime.now().isoformat(timespec="seconds"),
                "labs": [str(x) for x in labs],
                "model_sha1": file_sha1(mpath)}

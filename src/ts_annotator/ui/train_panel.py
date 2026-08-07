@@ -36,7 +36,11 @@ class TrainPanel(QWidget):
         model_row = QHBoxLayout()
         model_row.addWidget(QLabel("modelo"))
         self.model_combo = QComboBox()
-        self.model_combo.addItem("InceptionTime (IT)", "it")   # + arquiteturas no futuro
+        # o catálogo é a IT nativa + o que o tsai (opcional) exportar; sem tsai
+        # sobra um item e o combo se comporta como antes
+        from ts_annotator.core.architectures import available
+        for a in available():
+            self.model_combo.addItem("InceptionTime (IT)" if a == "it" else a, a)
         model_row.addWidget(self.model_combo, 1)
         L.addLayout(model_row)
 
