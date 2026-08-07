@@ -6,7 +6,11 @@
 > + CLI `tsa <pasta-do-projeto>` (`app/main.py`, entry-point no pyproject). Cobre: project.yaml
 > (timeseries por glob/lista, classes, overrides de visualização, similarity, reference npz,
 > init, groups, period, **season** — `months:` rótulos do eixo da curva + `dry_months:` índices
-> dos meses secos p/ as features fenológicas), descoberta de visualizations/ (colorização inferida: ≥3 bandas→RGB,
+> dos meses secos p/ as features fenológicas, **descriptors** — qual extrator alimenta
+> similaridade/descoberta/proposta: `phenology` (padrão, o conjunto fenológico de NDVI;
+> `dry_months` só vale aqui), `shape` (descritores de forma por canal, sem limiar absoluto —
+> serve a dB, temperatura, qualquer série) ou `curve` (a curva achatada, sem suposição
+> nenhuma)), descoberta de visualizations/ (colorização inferida: ≥3 bandas→RGB,
 > 1 banda com colormap embutido→LUT do arquivo, 1 banda contínua→scalar com percentis 2–98),
 > layers/ (gpkg/geojson/shp), annotations/*.json (datasets selecionáveis; cria points.json
 > vazio), models/ e predictions/. A grade de referência é o 1º raster da série (as

@@ -281,7 +281,7 @@ class AnnotatorController:
         f = self.fx.extract(curve)
         self.curve_view.set_curve(curve)
         self.panel.set_scores(self._sim_score(f, exclude=p.get("id")), self.predict_point(curve),
-                              False, int(f[0]), p["class"], quality=p.get("_clean"))
+                              False, self.fx.headline(f), p["class"], quality=p.get("_clean"))
         self.state["last"] = (p["row"], p["col"], curve)
         # origem = mapa: sem isto, rotular depois de vir de uma sugestão dispararia
         # advance_suggestion e descartaria uma sugestão que nunca foi rotulada
@@ -328,7 +328,7 @@ class AnnotatorController:
             return
         f = self.fx.extract(curve)
         self.curve_view.set_curve(curve)
-        self.panel.set_scores(self._sim_score(f), self.predict_point(curve), False, int(f[0]), None)
+        self.panel.set_scores(self._sim_score(f), self.predict_point(curve), False, self.fx.headline(f), None)
         self.state["last"] = (row, col, curve)
         self.state["last_src"] = "map"   # ver select_point: não herdar "sugg" de antes
         self._mark_cursor(row, col)      # crosshair no pixel em foco (antes de rotular)
@@ -366,7 +366,7 @@ class AnnotatorController:
         f = self.fx.extract(curve)
         lp = self.store.find_at(row, col)   # leave-one-out: não pontuar contra si mesmo
         self.panel.set_scores(self._sim_score(f, exclude=lp.get("id") if lp else None),
-                              self.predict_point(curve), False, int(f[0]), cls)
+                              self.predict_point(curve), False, self.fx.headline(f), cls)
 
     def on_class_added(self, name):
         """Nova classe criada no painel: propaga a cor pro mapa de cores da janela.
@@ -880,7 +880,7 @@ class AnnotatorController:
         f = self.fx.extract(curve)
         ex = self.store.find_at(r, c)
         self.navigate(r, c, curve, self._sim_score(f, exclude=ex.get("id") if ex else None),
-                      ex["class"] if ex else None, int(f[0]))
+                      ex["class"] if ex else None, self.fx.headline(f))
 
     def on_sugg_select(self, cur, _prev=None):
         if cur is None:
@@ -899,7 +899,7 @@ class AnnotatorController:
             curve = np.asarray(c["curve"], float)
         f = self.fx.extract(curve)
         self.navigate(c["row"], c["col"], curve, self._sim_score(f),
-                      ex["class"] if ex else None, int(f[0]), src="sugg")
+                      ex["class"] if ex else None, self.fx.headline(f), src="sugg")
 
     def advance_suggestion(self):
         """Após rotular uma sugestão: remove da lista e seleciona a próxima."""
@@ -1063,7 +1063,7 @@ class AnnotatorController:
         curve = self.ts.read_curve(p["row"], p["col"])
         f = self.fx.extract(curve)
         self.navigate(p["row"], p["col"], curve, self._sim_score(f, exclude=p.get("id")),
-                      p["class"], int(f[0]), quality=p.get("_clean"))
+                      p["class"], self.fx.headline(f), quality=p.get("_clean"))
 
     def zoom_to_point(self, pid):
         """Duplo-clique na tabela: enquadra APERTADO no ponto (± ~120 px)."""

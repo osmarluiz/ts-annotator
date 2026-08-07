@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 from ts_annotator.app.session import AppContext
 from ts_annotator.core.annotation_store import AnnotationStore
-from ts_annotator.core.features import FeatureExtractor
+from ts_annotator.core.features import make_extractor
 from ts_annotator.core.raster_source import RasterSource
 from ts_annotator.core.selection import SelectionEngine
 from ts_annotator.core.similarity import SimilarityEngine
@@ -325,7 +325,11 @@ def load_workspace(project_dir) -> AppContext:
     scfg_season = cfg.get("season") or {}
     season_months = scfg_season.get("months")
     dry = scfg_season.get("dry_months")
-    fx = FeatureExtractor(dry=tuple(dry)) if dry else FeatureExtractor()
+    # descriptors: escolhe o extrator. Ausente = phenology, que e' o que todo
+    # projeto recebia antes de haver escolha; dry_months so' faz sentido nele.
+    kind = (cfg.get("descriptors") or "phenology").strip().lower()
+    fx = (make_extractor(kind, dry=tuple(dry)) if (kind == "phenology" and dry)
+          else make_extractor(kind))
 
     ts = _build_timeseries(project_dir, cfg)
     # grade de referência (dims/transform/crs) = 1º raster da série; as
