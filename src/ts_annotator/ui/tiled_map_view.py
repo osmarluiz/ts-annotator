@@ -355,7 +355,6 @@ class TiledMapView(QWidget):
         """Recalcula a geometria dos overlays no viewport atual (ex.: ao ligar/
         trocar o preenchimento, que precisa reconstruir o path)."""
         self._update_overlays()
-        return item
 
     def _update_overlays(self):
         if not self._overlays:
