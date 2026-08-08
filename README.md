@@ -158,9 +158,6 @@ weights trace back to the exact labelled state behind them.
 
 If this tool is useful in your work, please cite it. See `CITATION.cff`.
 
-A methods paper describing TSA has been submitted to *MethodsX*. This README will carry
-the reference once it is available.
-
 ## Licence
 
 MIT. See `LICENSE`.
